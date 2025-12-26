@@ -3,6 +3,8 @@ from analysis.src.data_prices import fetch_prices_weekly
 from analysis.src.data_factors import fetch_all_factors
 from analysis.src.build_frames import build_frames
 from analysis.src.rolling_model import run_rolling_from_parquet
+from analysis.src.attribution import attribution_from_parquets
+from analysis.src.regimes import regimes_and_summary
 
 def main():
     cfg = get_config()
@@ -15,7 +17,7 @@ def main():
     print("Output paths:", cfg.out_data, cfg.out_json, cfg.out_reports)
 
     # 1) Prices
-    print("\n[1/4] Fetching prices -> weekly returns (cached)")
+    print("\n[1/6] Fetching prices -> weekly returns (cached)")
     price_out = fetch_prices_weekly(
         tickers=cfg.tickers,
         start=cfg.start,
@@ -27,13 +29,13 @@ def main():
     print("Saved:", price_out)
 
     # 2) Factors
-    print("\n[2/4] Fetching Fama-French factors (cached)")
+    print("\n[2/6] Fetching Fama-French factors (cached)")
     factors_dir = cfg.out_data / "factors"
     factors = fetch_all_factors(start=cfg.start, end=cfg.end, cache_dir=factors_dir, force=False)
     print("Saved:", factors)
 
     # 3) Frames
-    print("\n[3/4] Building model frames")
+    print("\n[3/6] Building model frames")
     frames_dir = cfg.out_data / "frames"
     frames = build_frames(
         returns_path=price_out["weekly_returns"],
@@ -47,8 +49,8 @@ def main():
     )
     print("Saved frames:", frames)
 
-    # 4) Rolling exposures (Milestone 2)
-    print("\n[4/4] Running rolling regressions -> exposures (cached)")
+    # 4) Rolling exposures
+    print("\n[4/6] Running rolling regressions -> exposures (cached)")
     exposures_dir = cfg.out_data / "exposures"
 
     exp_us = run_rolling_from_parquet(
@@ -76,7 +78,50 @@ def main():
     )
 
     print("Saved exposures:", exp_us, exp_intl, exp_macro)
-    print("\nMilestone 2 complete if all files exist and no errors occurred.")
+
+    # 5) Attribution
+    print("\n[5/6] Attribution (lagged exposures, no look-ahead)")
+    attrib_dir = cfg.out_data / "attribution"
+
+    a_us = attribution_from_parquets(
+        frame_path=frames["frame_equity_us"],
+        exposures_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
+        out_path=attrib_dir / "attrib_equity_us.parquet",
+        y_col="Y",
+    )
+
+    a_intl = attribution_from_parquets(
+        frame_path=frames["frame_equity_intl"],
+        exposures_path=cfg.out_data / "exposures" / "exposures_equity_intl.parquet",
+        out_path=attrib_dir / "attrib_equity_intl.parquet",
+        y_col="Y",
+    )
+
+    a_macro = attribution_from_parquets(
+        frame_path=frames["frame_total_macro"],
+        exposures_path=cfg.out_data / "exposures" / "exposures_total_macro.parquet",
+        out_path=attrib_dir / "attrib_total_macro.parquet",
+        y_col="Y",
+    )
+
+    print("Saved attribution:", a_us, a_intl, a_macro)
+
+    # 6) Regimes
+    print("\n[6/6] Regime labeling + summary")
+    out_regimes = cfg.out_data / "regimes" / "regimes.parquet"
+    out_summary = cfg.out_reports / "regime_summary.json"
+    r_path, s_path = regimes_and_summary(
+        returns_path=cfg.out_data / "returns_weekly.parquet",
+        exposures_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
+        out_regimes_path=out_regimes,
+        out_summary_path=out_summary,
+        vol_window_weeks=cfg.vol_window_weeks,
+        lookback_weeks=cfg.vol_lookback_weeks,
+        percentile=cfg.vol_percentile,
+        weights=cfg.weights,
+    )
+    print("Saved regimes + summary:", r_path, s_path)
+    print("\nMilestone 3 complete if all files exist and no errors occurred.")
 
 if __name__ == "__main__":
     main()
