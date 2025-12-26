@@ -1,3 +1,4 @@
+from analysis.src.export_json import export_json_bundle
 from analysis.src.config import get_config
 from analysis.src.data_prices import fetch_prices_weekly
 from analysis.src.data_factors import fetch_all_factors
@@ -122,6 +123,32 @@ def main():
     )
     print("Saved regimes + summary:", r_path, s_path)
     print("\nMilestone 3 complete if all files exist and no errors occurred.")
+    # 7) Export JSON for site (Milestone 4)
+    print("\n[7/7] Exporting JSON bundle for site")
+    meta = {
+        "tickers": list(cfg.tickers),
+        "weights": list(cfg.weights),
+        "frequency": cfg.freq,
+        "rolling_window_weeks": cfg.rolling_window_weeks,
+        "min_nobs": cfg.min_nobs,
+        "regime": {
+            "vol_window_weeks": cfg.vol_window_weeks,
+            "percentile": cfg.vol_percentile,
+            "lookback_weeks": cfg.vol_lookback_weeks,
+        },
+    }
+
+    paths = export_json_bundle(
+        out_json_dir=cfg.out_json,
+        meta=meta,
+        exposures_us_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
+        exposures_intl_path=cfg.out_data / "exposures" / "exposures_equity_intl.parquet",
+        attrib_us_path=cfg.out_data / "attribution" / "attrib_equity_us.parquet",
+        attrib_intl_path=cfg.out_data / "attribution" / "attrib_equity_intl.parquet",
+        regimes_path=cfg.out_data / "regimes" / "regimes.parquet",
+        regime_summary_path=cfg.out_reports / "regime_summary.json",
+    )
+    print("Saved JSON:", paths)
 
 if __name__ == "__main__":
     main()
