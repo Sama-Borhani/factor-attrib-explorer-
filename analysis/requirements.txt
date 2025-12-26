@@ -1,0 +1,9 @@
+pandas
+numpy
+yfinance
+pandas-datareader
+statsmodels
+pyarrow
+pydantic
+pytest
+python-dateutil

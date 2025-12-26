@@ -1,44 +1,23 @@
-# ----------------------
 # Python
-# ----------------------
+__pycache__/
+*.pyc
 .venv/
 venv/
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
 
-# ----------------------
-# Data outputs / caches
-# ----------------------
-analysis/outputs/data/
-analysis/outputs/*.parquet
-analysis/outputs/*.csv
+# Jupyter
+.ipynb_checkpoints/
 
-# Keep JSON exports used by the site
-!site/public/data/*.json
+# Data / outputs
+analysis/outputs/
+site/public/data/
+*.parquet
+*.csv
+*.json
 
-# ----------------------
-# Node / Next.js
-# ----------------------
+# Node
 site/node_modules/
 site/.next/
 site/out/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# ----------------------
-# Environment / secrets
-# ----------------------
-.env
-.env.local
-.env.*.local
-
-# ----------------------
-# OS junk
-# ----------------------
+# OS
 .DS_Store
-Thumbs.db
