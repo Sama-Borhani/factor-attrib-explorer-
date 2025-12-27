@@ -178,6 +178,34 @@ def export_json_bundle(
     out_sum = out_json_dir / "regime_summary.json"
     out_sum.write_text(json.dumps(summary_payload, indent=2))
 
+    # manifest
+    manifest = {
+        "build_timestamp": datetime.now(timezone.utc).isoformat(),
+        "git_commit": _git_commit_hash(out_json_dir),
+        "config": {
+            "tickers": meta_model.tickers,
+            "weights": meta_model.weights,
+            "frequency": meta_model.frequency,
+            "rolling_window_weeks": meta_model.rolling_window_weeks,
+            "min_nobs": meta_model.min_nobs,
+            "factor_set": meta_model.factor_set,
+        },
+        "regime_rule": meta_model.regime,
+        "units": {
+            "returns": "decimals (e.g., 0.01 = 1%)",
+            "factors": "decimals (e.g., 0.01 = 1%)",
+            "volatility": "standard deviation of returns (decimals)",
+        },
+        "disclaimers": [
+            "This project is for educational and illustrative purposes only.",
+            "No forecasting or trading signals are produced.",
+            "Past performance does not guarantee future results.",
+        ],
+    }
+    manifest_model = _validate(ManifestModel, manifest)
+    manifest_path = out_json_dir / "manifest.json"
+    manifest_path.write_text(_model_dump_json(manifest_model, indent=2))
+
     return {
         "meta": meta_path,
         "exposures_us": out_json_dir / "exposures_equity_us.json",

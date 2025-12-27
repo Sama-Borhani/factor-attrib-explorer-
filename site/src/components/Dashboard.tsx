@@ -96,6 +96,7 @@ export default function Dashboard() {
       setAttUs(aUs);
       setAttIntl(aIntl);
       setRegAll(rPayload.data ?? []);
+      setRegSummary(rPayload.summary ?? null);
 
       console.log("[load] OK", {
         us: { exp: eUs.length, att: aUs.length },

@@ -13,6 +13,8 @@ site/public/data/
 *.parquet
 *.csv
 *.json
+!site/package.json
+!site/package-lock.json
 
 # Node
 site/node_modules/
