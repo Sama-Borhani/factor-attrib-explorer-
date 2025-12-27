@@ -4,6 +4,13 @@ import json
 import numpy as np
 import pandas as pd
 
+
+def _max_drawdown(returns: pd.Series) -> float:
+    wealth = (1 + returns).cumprod()
+    running_max = wealth.cummax()
+    drawdown = wealth / running_max - 1
+    return float(drawdown.min())
+
 def compute_regimes(
     returns: pd.Series,
     vol_window_weeks: int,
@@ -28,6 +35,7 @@ def compute_regimes(
 def regimes_and_summary(
     returns_path: Path,
     exposures_path: Path,
+    attribution_path: Path,
     out_regimes_path: Path,
     out_summary_path: Path,
     vol_window_weeks: int,
@@ -64,10 +72,51 @@ def regimes_and_summary(
     exp.index = pd.to_datetime(exp.index)
     exp = exp.sort_index()
 
-    merged = exp.join(regimes[["regime"]], how="inner").dropna()
-    summary = merged.groupby("regime").mean(numeric_only=True).to_dict()
+    attrib = pd.read_parquet(attribution_path)
+    attrib.index = pd.to_datetime(attrib.index)
+    attrib = attrib.sort_index()
+
+    merged_exp = exp.join(regimes[["regime"]], how="inner").dropna()
+    merged_attr = attrib.join(regimes[["regime", "vol"]], how="inner").dropna()
+
+    beta_cols = [c for c in merged_exp.columns if c.startswith("beta_")]
+    beta_means = merged_exp.groupby("regime")[beta_cols].mean(numeric_only=True)
+
+    explained_means = (
+        merged_attr.groupby("regime")[["explained_share", "vol"]]
+        .mean(numeric_only=True)
+        .rename(columns={"vol": "mean_vol"})
+    )
+
+    drawdowns = {}
+    for regime in ["calm", "stress"]:
+        r = regimes.loc[regimes["regime"] == regime, "ret"]
+        drawdowns[regime] = {"max_drawdown": _max_drawdown(r)}
+
+    summary = {}
+    for regime in ["calm", "stress"]:
+        summary[regime] = {}
+        if regime in beta_means.index:
+            summary[regime].update({f"mean_{k}": float(v) for k, v in beta_means.loc[regime].items()})
+        if regime in explained_means.index:
+            summary[regime]["mean_explained_share"] = float(explained_means.loc[regime, "explained_share"])
+            summary[regime]["mean_vol"] = float(explained_means.loc[regime, "mean_vol"])
+        summary[regime].update(drawdowns.get(regime, {}))
+
+    stress_fraction = float((regimes["regime"] == "stress").mean())
+
+    payload = {
+        "metadata": {
+            "rule": "stress if rolling vol_t >= trailing quantile(vol, percentile) using lookback ending at t-1",
+            "vol_window_weeks": vol_window_weeks,
+            "lookback_weeks": lookback_weeks,
+            "percentile": percentile,
+        },
+        "stress_fraction": stress_fraction,
+        "summary": summary,
+    }
 
     out_summary_path.parent.mkdir(parents=True, exist_ok=True)
-    out_summary_path.write_text(json.dumps(summary, indent=2))
+    out_summary_path.write_text(json.dumps(payload, indent=2))
 
     return out_regimes_path, out_summary_path
