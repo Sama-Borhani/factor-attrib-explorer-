@@ -35,6 +35,17 @@ type RegimeRow = {
   vol_thresh: number;
 };
 
+type RegimesPayload = {
+  metadata: {
+    vol_window_weeks?: number;
+    lookback_weeks?: number;
+    percentile?: number;
+  };
+  stress_fraction?: number;
+  summary?: Record<string, Record<string, number>>;
+  data: RegimeRow[];
+};
+
 type Aligned = {
   exposures: ExposureRow[];
   attribution: AttribRow[];
@@ -64,12 +75,12 @@ export default function Dashboard() {
       setLoadErr(null);
 
       const m = await loadJson<Meta>("/data/meta.json");
-      const [eUs, eIntl, aUs, aIntl, r] = await Promise.all([
+      const [eUs, eIntl, aUs, aIntl, rPayload] = await Promise.all([
         loadJson<ExposureRow[]>("/data/exposures_equity_us.json"),
         loadJson<ExposureRow[]>("/data/exposures_equity_intl.json"),
         loadJson<AttribRow[]>("/data/attribution_equity_us.json"),
         loadJson<AttribRow[]>("/data/attribution_equity_intl.json"),
-        loadJson<RegimeRow[]>("/data/regimes.json"),
+        loadJson<RegimesPayload>("/data/regimes.json"),
       ]);
 
       if (!alive) return;
@@ -79,12 +90,12 @@ export default function Dashboard() {
       setExpIntl(eIntl);
       setAttUs(aUs);
       setAttIntl(aIntl);
-      setRegAll(r);
+      setRegAll(rPayload.data ?? []);
 
       console.log("[load] OK", {
         us: { exp: eUs.length, att: aUs.length },
         intl: { exp: eIntl.length, att: aIntl.length },
-        regimes: r.length,
+        regimes: rPayload.data?.length ?? 0,
       });
     })().catch((err) => {
       console.error(err);
