@@ -7,10 +7,17 @@ def test_outputs_exist():
     assert (ROOT/"analysis/outputs/data/returns_weekly.parquet").exists()
     assert (ROOT/"analysis/outputs/data/factors").exists()
     assert (ROOT/"analysis/outputs/data/frames").exists()
+    assert (ROOT/"analysis/outputs/data/frames/model_frame.parquet").exists()
+    assert (ROOT/"analysis/outputs/reports/quality_report.json").exists()
 
 def test_frames_no_nans_and_monotonic():
     frames_dir = ROOT / "analysis" / "outputs" / "data" / "frames"
-    for name in ["frame_equity_us.parquet", "frame_equity_intl.parquet", "frame_total_macro.parquet"]:
+    for name in [
+        "frame_equity_us.parquet",
+        "frame_equity_intl.parquet",
+        "frame_total_macro.parquet",
+        "model_frame.parquet",
+    ]:
         df = pd.read_parquet(frames_dir / name)
         assert df.index.is_monotonic_increasing
         assert df.isna().sum().sum() == 0
