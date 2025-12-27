@@ -11,6 +11,7 @@ from analysis.src.schemas import (
     ExposureRow,
     ManifestModel,
     MetaModel,
+    QualityReportModel,
     RegimesPayload,
 )
 
@@ -73,6 +74,7 @@ def export_json_bundle(
     attrib_intl_path: Path,
     regimes_path: Path,
     regime_summary_path: Path,
+    quality_report_path: Path | None = None,
 ) -> dict[str, Path]:
     out_json_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,6 +89,16 @@ def export_json_bundle(
     for df in (exp_us, exp_intl):
         df["rolling_window_weeks"] = meta.get("rolling_window_weeks")
         df["min_nobs"] = meta.get("min_nobs")
+
+    exp_us_rows = _df_to_records(exp_us)
+    exp_intl_rows = _df_to_records(exp_intl)
+    for row in exp_us_rows:
+        _validate(ExposureRow, row)
+    for row in exp_intl_rows:
+        _validate(ExposureRow, row)
+
+    (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(exp_us_rows, indent=2))
+    (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(exp_intl_rows, indent=2))
 
     exp_us_rows = _df_to_records(exp_us)
     exp_intl_rows = _df_to_records(exp_intl)
@@ -169,6 +181,13 @@ def export_json_bundle(
     out_sum = out_json_dir / "regime_summary.json"
     out_sum.write_text(json.dumps(summary_payload, indent=2))
 
+    quality_path = None
+    if quality_report_path is not None and quality_report_path.exists():
+        quality_payload = json.loads(Path(quality_report_path).read_text())
+        _validate(QualityReportModel, quality_payload)
+        quality_path = out_json_dir / "quality_report.json"
+        quality_path.write_text(json.dumps(quality_payload, indent=2))
+
     # manifest
     manifest = {
         "build_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -206,4 +225,5 @@ def export_json_bundle(
         "regimes": out_json_dir / "regimes.json",
         "regime_summary": out_sum,
         "manifest": manifest_path,
+        "quality_report": quality_path,
     }

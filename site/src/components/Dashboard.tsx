@@ -4,48 +4,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { loadJson } from "@/lib/loadJson";
 import { alignByIntersection } from "@/lib/alignByDate";
+import ConfidenceBands from "@/components/charts/ConfidenceBands";
+import DataQuality from "@/components/panels/DataQuality";
+import { computeConfidenceBands } from "@/utils/calculations/confidence";
+import type { AttribRow, ExposureRow, Manifest, Meta, QualityReport, RegimeRow, RegimesPayload } from "@/types/models";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
-
-type Meta = {
-  tickers: string[];
-  weights: Record<string, number>;
-  frequency: string;
-  rolling_window_weeks: number;
-  min_nobs: number;
-  factor_set: string;
-  regime: { vol_window_weeks: number; percentile: number; lookback_weeks: number };
-};
-
-type ExposureRow = {
-  date: string;
-  alpha: number;
-  r2: number;
-  nobs: number;
-  beta_MKT_RF: number;
-  beta_SMB: number;
-  beta_HML: number;
-};
-
-type AttribRow = { date: string; [k: string]: any };
-
-type RegimeRow = {
-  date: string;
-  regime: "calm" | "stress";
-  vol: number;
-  vol_thresh: number;
-};
-
-type RegimesPayload = {
-  metadata: {
-    vol_window_weeks?: number;
-    lookback_weeks?: number;
-    percentile?: number;
-  };
-  stress_fraction?: number;
-  summary?: Record<string, Record<string, number>>;
-  data: RegimeRow[];
-};
 
 type Aligned = {
   exposures: ExposureRow[];
@@ -63,6 +27,7 @@ export default function Dashboard() {
   const [dateStart, setDateStart] = useState<string>("");
   const [dateEnd, setDateEnd] = useState<string>("");
   const [regSummary, setRegSummary] = useState<Record<string, Record<string, number>> | null>(null);
+  const [showBands, setShowBands] = useState<boolean>(false);
 
   // Raw (un-aligned) data
   const [expUs, setExpUs] = useState<ExposureRow[]>([]);
@@ -70,6 +35,8 @@ export default function Dashboard() {
   const [attUs, setAttUs] = useState<AttribRow[]>([]);
   const [attIntl, setAttIntl] = useState<AttribRow[]>([]);
   const [regAll, setRegAll] = useState<RegimeRow[]>([]);
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
+  const [manifest, setManifest] = useState<Manifest | null>(null);
 
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
@@ -80,12 +47,14 @@ export default function Dashboard() {
       setLoadErr(null);
 
       const m = await loadJson<Meta>("/data/meta.json");
-      const [eUs, eIntl, aUs, aIntl, rPayload] = await Promise.all([
+      const [eUs, eIntl, aUs, aIntl, rPayload, qReport, manifestPayload] = await Promise.all([
         loadJson<ExposureRow[]>("/data/exposures_equity_us.json"),
         loadJson<ExposureRow[]>("/data/exposures_equity_intl.json"),
         loadJson<AttribRow[]>("/data/attribution_equity_us.json"),
         loadJson<AttribRow[]>("/data/attribution_equity_intl.json"),
         loadJson<RegimesPayload>("/data/regimes.json"),
+        loadJson<QualityReport>("/data/quality_report.json"),
+        loadJson<Manifest>("/data/manifest.json"),
       ]);
 
       if (!alive) return;
@@ -97,6 +66,8 @@ export default function Dashboard() {
       setAttIntl(aIntl);
       setRegAll(rPayload.data ?? []);
       setRegSummary(rPayload.summary ?? null);
+      setQualityReport(qReport ?? null);
+      setManifest(manifestPayload ?? null);
     })().catch((err) => {
       if (!alive) return;
       setLoadErr(String(err));
@@ -157,6 +128,22 @@ export default function Dashboard() {
   const exposureFiltered = exposureWindowed;
   const attribFiltered = attribWindowed;
 
+  const betaBands = useMemo(() => {
+    return [
+      { name: "MKT", bands: computeConfidenceBands(exposureFiltered, "beta_MKT_RF", "stderr_beta_MKT_RF") },
+      { name: "SMB", bands: computeConfidenceBands(exposureFiltered, "beta_SMB", "stderr_beta_SMB") },
+      { name: "HML", bands: computeConfidenceBands(exposureFiltered, "beta_HML", "stderr_beta_HML") },
+    ];
+  }, [exposureFiltered]);
+
+  const latestBandRanges = useMemo(() => {
+    return betaBands.map((series) => {
+      const last = series.bands[series.bands.length - 1];
+      if (!last) return `${series.name}: n/a`;
+      return `${series.name}: ${last.value.toFixed(2)} [${last.lower.toFixed(2)} - ${last.upper.toFixed(2)}]`;
+    });
+  }, [betaBands]);
+
   const contribKeys = useMemo(() => {
     if (!attribFiltered.length) return [];
     return Object.keys(attribFiltered[0]).filter((k) => k.startsWith("contrib_"));
@@ -187,7 +174,6 @@ export default function Dashboard() {
     });
   }
 
-  const xExp = useMemo(() => exposureWindowed.map((r) => r.date), [exposureWindowed]);
   const xAtt = useMemo(() => attribWindowed.map((r) => r.date), [attribWindowed]);
 
   const stressSummary = regSummary?.stress ?? null;
@@ -271,6 +257,12 @@ export default function Dashboard() {
         </label>
 
         <label>
+          Bands:&nbsp;
+          <input type="checkbox" checked={showBands} onChange={(e) => setShowBands(e.target.checked)} />
+          &nbsp;95% CI
+        </label>
+
+        <label>
           Start:&nbsp;
           <input
             type="date"
@@ -302,23 +294,10 @@ export default function Dashboard() {
 
       <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14, marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, margin: "0 0 8px 0" }}>Rolling exposures (betas)</h2>
-        <Plot
-          data={[
-            { x: xExp, y: exposureFiltered.map((r) => r.beta_MKT_RF), type: "scatter", mode: "lines", name: "MKT" },
-            { x: xExp, y: exposureFiltered.map((r) => r.beta_SMB), type: "scatter", mode: "lines", name: "SMB" },
-            { x: xExp, y: exposureFiltered.map((r) => r.beta_HML), type: "scatter", mode: "lines", name: "HML" },
-          ]}
-          layout={{
-            autosize: true,
-            height: 380,
-            margin: { l: 50, r: 20, t: 10, b: 40 },
-            xaxis: { title: "Date" },
-            yaxis: { title: "Beta" },
-            legend: { orientation: "h" },
-          }}
-          style={{ width: "100%" }}
-          config={{ displayModeBar: false }}
-        />
+        <ConfidenceBands title="Rolling exposures (betas)" series={betaBands} showBands={showBands} />
+        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
+          Latest ranges: {latestBandRanges.join(" · ")}
+        </div>
       </div>
 
       <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14, marginBottom: 16 }}>
@@ -393,6 +372,8 @@ export default function Dashboard() {
           <div>Waiting for regime summary data…</div>
         )}
       </div>
+
+      <DataQuality report={qualityReport} lastRefresh={manifest?.build_timestamp} />
 
       <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
         <h2 style={{ fontSize: 18, margin: "0 0 8px 0" }}>Method snapshot</h2>

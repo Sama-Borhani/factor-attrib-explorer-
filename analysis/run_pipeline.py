@@ -175,6 +175,7 @@ def main() -> None:
         attrib_intl_path=cfg.out_data / "attribution" / "attrib_equity_intl.parquet",
         regimes_path=cfg.out_data / "regimes" / "regimes.parquet",
         regime_summary_path=cfg.out_reports / "regime_summary.json",
+        quality_report_path=cfg.out_reports / "quality_report.json",
     )
     print("Saved JSON:", paths)
 

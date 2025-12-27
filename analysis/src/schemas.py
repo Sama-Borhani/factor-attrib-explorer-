@@ -62,3 +62,10 @@ class ManifestModel(BaseModel):
     regime_rule: Dict[str, Any]
     units: Dict[str, str]
     disclaimers: List[str]
+
+
+class QualityReportModel(BaseModel):
+    missing_pct_weekly_returns: Dict[str, float]
+    coverage: Dict[str, Dict[str, Any]]
+    aligned_sample_sizes: Dict[str, int]
+    notes: Dict[str, str]
