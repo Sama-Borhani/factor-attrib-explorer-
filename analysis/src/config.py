@@ -19,7 +19,11 @@ class Config:
 
     # Rolling regression
     rolling_window_weeks: int = 52
+    rolling_windows_weeks: tuple[int, ...] = (26, 52)
     min_nobs: int = 45
+
+    # Factor set
+    factor_set: str = "FF3"
 
     # Regimes (portfolio realized vol)
     vol_window_weeks: int = 8
@@ -31,6 +35,7 @@ class Config:
     out_data: Path = root / "analysis" / "outputs" / "data"
     out_json: Path = root / "analysis" / "outputs" / "json"
     out_reports: Path = root / "analysis" / "outputs" / "reports"
+    site_public_data: Path = root / "site" / "public" / "data"
 
 def get_config() -> Config:
     cfg = Config(weights={t: 0.10 for t in Config().tickers})
