@@ -21,3 +21,4 @@ site/out/
 
 # OS
 .DS_Store
+.venv/
