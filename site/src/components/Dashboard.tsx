@@ -9,10 +9,11 @@ const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 type Meta = {
   tickers: string[];
-  weights: number[];
+  weights: Record<string, number>;
   frequency: string;
   rolling_window_weeks: number;
   min_nobs: number;
+  factor_set: string;
   regime: { vol_window_weeks: number; percentile: number; lookback_weeks: number };
 };
 
@@ -35,6 +36,17 @@ type RegimeRow = {
   vol_thresh: number;
 };
 
+type RegimesPayload = {
+  metadata: {
+    vol_window_weeks?: number;
+    lookback_weeks?: number;
+    percentile?: number;
+  };
+  stress_fraction?: number;
+  summary?: Record<string, Record<string, number>>;
+  data: RegimeRow[];
+};
+
 type Aligned = {
   exposures: ExposureRow[];
   attribution: AttribRow[];
@@ -47,6 +59,10 @@ export default function Dashboard() {
   const [which, setWhich] = useState<"us" | "intl">("us");
   const [regimeFilter, setRegimeFilter] = useState<"all" | "calm" | "stress">("all");
   const [windowSel, setWindowSel] = useState<"3m" | "1y" | "2y" | "max">("1y");
+  const [modelSel, setModelSel] = useState<"ff3" | "ff5">("ff3");
+  const [dateStart, setDateStart] = useState<string>("");
+  const [dateEnd, setDateEnd] = useState<string>("");
+  const [regSummary, setRegSummary] = useState<Record<string, Record<string, number>> | null>(null);
 
   // Raw (un-aligned) data
   const [expUs, setExpUs] = useState<ExposureRow[]>([]);
@@ -64,12 +80,12 @@ export default function Dashboard() {
       setLoadErr(null);
 
       const m = await loadJson<Meta>("/data/meta.json");
-      const [eUs, eIntl, aUs, aIntl, r] = await Promise.all([
+      const [eUs, eIntl, aUs, aIntl, rPayload] = await Promise.all([
         loadJson<ExposureRow[]>("/data/exposures_equity_us.json"),
         loadJson<ExposureRow[]>("/data/exposures_equity_intl.json"),
         loadJson<AttribRow[]>("/data/attribution_equity_us.json"),
         loadJson<AttribRow[]>("/data/attribution_equity_intl.json"),
-        loadJson<RegimeRow[]>("/data/regimes.json"),
+        loadJson<RegimesPayload>("/data/regimes.json"),
       ]);
 
       if (!alive) return;
@@ -79,15 +95,9 @@ export default function Dashboard() {
       setExpIntl(eIntl);
       setAttUs(aUs);
       setAttIntl(aIntl);
-      setRegAll(r);
-
-      console.log("[load] OK", {
-        us: { exp: eUs.length, att: aUs.length },
-        intl: { exp: eIntl.length, att: aIntl.length },
-        regimes: r.length,
-      });
+      setRegAll(rPayload.data ?? []);
+      setRegSummary(rPayload.summary ?? null);
     })().catch((err) => {
-      console.error(err);
       if (!alive) return;
       setLoadErr(String(err));
     });
@@ -134,18 +144,18 @@ export default function Dashboard() {
     return rows.filter((r) => regimeByDate.get(r.date) === regimeFilter);
   }
 
-  const exposureFiltered = useMemo(
-    () => applyRegime(applyWindow(aligned.exposures)),
-    [aligned.exposures, windowSel, regimeFilter, regimeByDate]
+  const exposureWindowed = useMemo(
+    () => applyDateRange(applyRegime(applyWindow(aligned.exposures))),
+    [aligned.exposures, windowSel, regimeFilter, dateStart, dateEnd, regimeByDate]
   );
 
-  const attribFiltered = useMemo(
-    () => applyRegime(applyWindow(aligned.attribution)),
-    [aligned.attribution, windowSel, regimeFilter, regimeByDate]
+  const attribWindowed = useMemo(
+    () => applyDateRange(applyRegime(applyWindow(aligned.attribution))),
+    [aligned.attribution, windowSel, regimeFilter, dateStart, dateEnd, regimeByDate]
   );
 
-  const xExp = useMemo(() => exposureFiltered.map((r) => r.date), [exposureFiltered]);
-  const xAtt = useMemo(() => attribFiltered.map((r) => r.date), [attribFiltered]);
+  const exposureFiltered = exposureWindowed;
+  const attribFiltered = attribWindowed;
 
   const contribKeys = useMemo(() => {
     if (!attribFiltered.length) return [];
@@ -159,6 +169,55 @@ export default function Dashboard() {
   }, [aligned.regimes]);
 
   const points = aligned.exposures.length; // should be 455 for US
+
+  const dateBounds = useMemo(() => {
+    if (!aligned.exposures.length) return { min: "", max: "" };
+    return {
+      min: aligned.exposures[0].date,
+      max: aligned.exposures[aligned.exposures.length - 1].date,
+    };
+  }, [aligned.exposures]);
+
+  function applyDateRange<T extends { date: string }>(rows: T[]): T[] {
+    if (!dateStart && !dateEnd) return rows;
+    return rows.filter((r) => {
+      if (dateStart && r.date < dateStart) return false;
+      if (dateEnd && r.date > dateEnd) return false;
+      return true;
+    });
+  }
+
+  const xExp = useMemo(() => exposureWindowed.map((r) => r.date), [exposureWindowed]);
+  const xAtt = useMemo(() => attribWindowed.map((r) => r.date), [attribWindowed]);
+
+  const stressSummary = regSummary?.stress ?? null;
+  const calmSummary = regSummary?.calm ?? null;
+
+  const keyInsights = useMemo(() => {
+    const insights: string[] = [];
+    if (!stressSummary || !calmSummary) return insights;
+    const stressVol = stressSummary.mean_vol;
+    const calmVol = calmSummary.mean_vol;
+    if (stressVol && calmVol) {
+      const diff = stressVol - calmVol;
+      insights.push(
+        diff > 0
+          ? `Volatility is higher in stress regimes by ${(diff * 100).toFixed(2)}pp.`
+          : `Volatility is lower in stress regimes by ${(Math.abs(diff) * 100).toFixed(2)}pp.`
+      );
+    }
+    const stressExplained = stressSummary.mean_explained_share;
+    const calmExplained = calmSummary.mean_explained_share;
+    if (stressExplained && calmExplained) {
+      const diff = stressExplained - calmExplained;
+      insights.push(
+        diff > 0
+          ? `Explained share increases in stress by ${(diff * 100).toFixed(2)}pp.`
+          : `Explained share decreases in stress by ${(Math.abs(diff) * 100).toFixed(2)}pp.`
+      );
+    }
+    return insights;
+  }, [stressSummary, calmSummary]);
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>
@@ -183,6 +242,16 @@ export default function Dashboard() {
         </label>
 
         <label>
+          Model:&nbsp;
+          <select value={modelSel} onChange={(e) => setModelSel(e.target.value as any)}>
+            <option value="ff3">FF3</option>
+            <option value="ff5" disabled>
+              FF5 (coming soon)
+            </option>
+          </select>
+        </label>
+
+        <label>
           Window:&nbsp;
           <select value={windowSel} onChange={(e) => setWindowSel(e.target.value as any)}>
             <option value="3m">3M</option>
@@ -199,6 +268,28 @@ export default function Dashboard() {
             <option value="calm">Calm</option>
             <option value="stress">Stress</option>
           </select>
+        </label>
+
+        <label>
+          Start:&nbsp;
+          <input
+            type="date"
+            value={dateStart}
+            min={dateBounds.min}
+            max={dateBounds.max}
+            onChange={(e) => setDateStart(e.target.value)}
+          />
+        </label>
+
+        <label>
+          End:&nbsp;
+          <input
+            type="date"
+            value={dateEnd}
+            min={dateBounds.min}
+            max={dateBounds.max}
+            onChange={(e) => setDateEnd(e.target.value)}
+          />
         </label>
 
         <div style={{ opacity: 0.8 }}>
@@ -256,11 +347,59 @@ export default function Dashboard() {
         />
       </div>
 
+      <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, margin: "0 0 8px 0" }}>Calm vs stress comparison</h2>
+        {regSummary ? (
+          <Plot
+            data={[
+              {
+                x: ["Calm", "Stress"],
+                y: [calmSummary?.mean_vol ?? 0, stressSummary?.mean_vol ?? 0],
+                type: "bar",
+                name: "Mean vol",
+              },
+              {
+                x: ["Calm", "Stress"],
+                y: [calmSummary?.mean_explained_share ?? 0, stressSummary?.mean_explained_share ?? 0],
+                type: "bar",
+                name: "Mean explained share",
+              },
+            ]}
+            layout={{
+              autosize: true,
+              barmode: "group",
+              height: 320,
+              margin: { l: 50, r: 20, t: 10, b: 40 },
+              yaxis: { title: "Value" },
+              legend: { orientation: "h" },
+            }}
+            style={{ width: "100%" }}
+            config={{ displayModeBar: false }}
+          />
+        ) : (
+          <div>Loading…</div>
+        )}
+      </div>
+
+      <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, margin: "0 0 8px 0" }}>Key insights</h2>
+        {keyInsights.length ? (
+          <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.9 }}>
+            {keyInsights.map((insight) => (
+              <li key={insight}>{insight}</li>
+            ))}
+          </ul>
+        ) : (
+          <div>Waiting for regime summary data…</div>
+        )}
+      </div>
+
       <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
         <h2 style={{ fontSize: 18, margin: "0 0 8px 0" }}>Method snapshot</h2>
         {meta ? (
           <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.9 }}>
             <li>Frequency: {meta.frequency}</li>
+            <li>Model: {modelSel.toUpperCase()}</li>
             <li>Rolling window: {meta.rolling_window_weeks} weeks (min obs {meta.min_nobs})</li>
             <li>
               Regime rule: vol {meta.regime.vol_window_weeks}w, percentile {meta.regime.percentile}, lookback {meta.regime.lookback_weeks}w
@@ -270,7 +409,12 @@ export default function Dashboard() {
           <div>Loading…</div>
         )}
         <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
-          Limitations: factor datasets are US / Developed ex-US only; weekly aggregation; no forecasting.
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Limitations</div>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            <li>Factors are limited to US / Developed ex-US datasets.</li>
+            <li>Weekly aggregation; no daily modeling yet.</li>
+            <li>No forecasting or trading signals.</li>
+          </ul>
         </div>
       </div>
     </div>

@@ -1,0 +1,29 @@
+name: Data Refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * 1"
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r analysis/requirements.txt
+
+      - name: Run pipeline refresh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m analysis.run_pipeline

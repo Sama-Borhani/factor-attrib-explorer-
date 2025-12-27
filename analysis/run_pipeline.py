@@ -1,3 +1,5 @@
+import argparse
+
 from analysis.src.export_json import export_json_bundle
 from analysis.src.config import get_config
 from analysis.src.data_prices import fetch_prices_weekly
@@ -6,9 +8,9 @@ from analysis.src.build_frames import build_frames
 from analysis.src.rolling_model import run_rolling_from_parquet
 from analysis.src.attribution import attribution_from_parquets
 from analysis.src.regimes import regimes_and_summary
+from analysis.src.portfolio import write_portfolio_summary
 
-def main():
-    cfg = get_config()
+def _print_config(cfg) -> None:
     print("CONFIG LOADED")
     print("Tickers:", cfg.tickers)
     print("Weights sum:", sum(cfg.weights.values()))
@@ -16,6 +18,18 @@ def main():
     print("Rolling window:", cfg.rolling_window_weeks, "weeks | min_nobs:", cfg.min_nobs)
     print("Regime:", f"vol_window={cfg.vol_window_weeks}w, p={cfg.vol_percentile}, lookback={cfg.vol_lookback_weeks}w")
     print("Output paths:", cfg.out_data, cfg.out_json, cfg.out_reports)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run factor attribution pipeline.")
+    parser.add_argument("--dry-run", action="store_true", help="Print config and exit.")
+    args = parser.parse_args()
+
+    cfg = get_config()
+    _print_config(cfg)
+
+    if args.dry_run:
+        return
 
     # 1) Prices
     print("\n[1/6] Fetching prices -> weekly returns (cached)")
@@ -49,6 +63,18 @@ def main():
         total_universe=cfg.tickers,
     )
     print("Saved frames:", frames)
+
+    # 3b) Portfolio summary
+    print("\n[3b/6] Portfolio summary")
+    summary_path = write_portfolio_summary(
+        returns_path=price_out["weekly_returns"],
+        out_path=cfg.out_reports / "portfolio_summary.json",
+        weights=cfg.weights,
+        freq=cfg.freq,
+        missing_price_policy="drop_any",
+        compounding="geometric",
+    )
+    print("Saved portfolio summary:", summary_path)
 
     # 4) Rolling exposures
     print("\n[4/6] Running rolling regressions -> exposures (cached)")
@@ -114,6 +140,7 @@ def main():
     r_path, s_path = regimes_and_summary(
         returns_path=cfg.out_data / "returns_weekly.parquet",
         exposures_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
+        attribution_path=cfg.out_data / "attribution" / "attrib_equity_us.parquet",
         out_regimes_path=out_regimes,
         out_summary_path=out_summary,
         vol_window_weeks=cfg.vol_window_weeks,
@@ -127,10 +154,11 @@ def main():
     print("\n[7/7] Exporting JSON bundle for site")
     meta = {
         "tickers": list(cfg.tickers),
-        "weights": list(cfg.weights),
+        "weights": dict(cfg.weights),
         "frequency": cfg.freq,
         "rolling_window_weeks": cfg.rolling_window_weeks,
         "min_nobs": cfg.min_nobs,
+        "factor_set": cfg.factor_set,
         "regime": {
             "vol_window_weeks": cfg.vol_window_weeks,
             "percentile": cfg.vol_percentile,
@@ -139,7 +167,7 @@ def main():
     }
 
     paths = export_json_bundle(
-        out_json_dir=cfg.out_json,
+        out_json_dir=cfg.site_public_data,
         meta=meta,
         exposures_us_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
         exposures_intl_path=cfg.out_data / "exposures" / "exposures_equity_intl.parquet",

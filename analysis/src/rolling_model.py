@@ -21,6 +21,11 @@ def run_rolling_ols(
     Returns DataFrame indexed by end-of-window date with:
       alpha, betas..., r2, nobs
     """
+    if window <= len(x_cols) + 1:
+        raise ValueError(
+            f"Rolling window ({window}) must exceed regressors + intercept ({len(x_cols) + 1})."
+        )
+
     df = frame[[y_col] + x_cols].dropna().copy()
     df = df.sort_index()
 
@@ -50,11 +55,13 @@ def run_rolling_ols(
             "alpha": float(model.params[0]),
             "r2": float(model.rsquared),
             "nobs": int(model.nobs),
+            "stderr_alpha": float(model.bse[0]),
         }
 
         # betas
         for j, c in enumerate(x_cols, start=1):
             row[f"beta_{c}"] = float(model.params[j])
+            row[f"stderr_beta_{c}"] = float(model.bse[j])
 
         out_rows.append(row)
         out_index.append(dates[end_i])
