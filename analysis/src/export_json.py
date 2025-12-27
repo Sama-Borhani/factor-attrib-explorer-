@@ -98,7 +98,7 @@ def export_json_bundle(
     (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(exp_us_rows, indent=2))
     (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(exp_intl_rows, indent=2))
 
-    # attribution (keep only the columns we actually plot)
+    # attribution
     a_us = pd.read_parquet(attrib_us_path)
     a_intl = pd.read_parquet(attrib_intl_path)
 
