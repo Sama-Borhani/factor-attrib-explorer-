@@ -33,6 +33,10 @@ def export_json_bundle(
     # exposures
     exp_us = pd.read_parquet(exposures_us_path)
     exp_intl = pd.read_parquet(exposures_intl_path)
+    for df in (exp_us, exp_intl):
+        df["rolling_window_weeks"] = meta.get("rolling_window_weeks")
+        df["min_nobs"] = meta.get("min_nobs")
+
     (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(_df_to_records(exp_us), indent=2))
     (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(_df_to_records(exp_intl), indent=2))
 
