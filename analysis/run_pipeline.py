@@ -154,10 +154,11 @@ def main() -> None:
     print("\n[7/7] Exporting JSON bundle for site")
     meta = {
         "tickers": list(cfg.tickers),
-        "weights": list(cfg.weights),
+        "weights": dict(cfg.weights),
         "frequency": cfg.freq,
         "rolling_window_weeks": cfg.rolling_window_weeks,
         "min_nobs": cfg.min_nobs,
+        "factor_set": cfg.factor_set,
         "regime": {
             "vol_window_weeks": cfg.vol_window_weeks,
             "percentile": cfg.vol_percentile,
@@ -166,7 +167,7 @@ def main() -> None:
     }
 
     paths = export_json_bundle(
-        out_json_dir=cfg.out_json,
+        out_json_dir=cfg.site_public_data,
         meta=meta,
         exposures_us_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
         exposures_intl_path=cfg.out_data / "exposures" / "exposures_equity_intl.parquet",

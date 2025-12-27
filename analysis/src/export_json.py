@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
 import pandas as pd
+
+from analysis.src.schemas import (
+    AttributionRow,
+    ExposureRow,
+    ManifestModel,
+    MetaModel,
+    RegimesPayload,
+)
 
 
 def _df_to_records(df: pd.DataFrame, date_col: str = "date") -> list[dict]:
@@ -12,6 +22,46 @@ def _df_to_records(df: pd.DataFrame, date_col: str = "date") -> list[dict]:
     df[date_col] = df.index.strftime("%Y-%m-%d")
     df = df.reset_index(drop=True)
     return df.to_dict(orient="records")
+
+
+def _validate(model, data):
+    if hasattr(model, "model_validate"):
+        return model.model_validate(data)
+    return model.parse_obj(data)
+
+
+def _model_dump_json(model, indent: int = 2) -> str:
+    if hasattr(model, "model_dump_json"):
+        return model.model_dump_json(indent=indent)
+    return model.json(indent=indent)
+
+
+def _find_git_root(start: Path) -> Path | None:
+    current = start.resolve()
+    for _ in range(10):
+        if (current / ".git").exists():
+            return current
+        if current.parent == current:
+            break
+        current = current.parent
+    return None
+
+
+def _git_commit_hash(start: Path) -> str | None:
+    try:
+        repo_root = _find_git_root(start)
+        if repo_root is None:
+            return None
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return None
 
 
 def export_json_bundle(
@@ -26,9 +76,10 @@ def export_json_bundle(
 ) -> dict[str, Path]:
     out_json_dir.mkdir(parents=True, exist_ok=True)
 
-    # meta
+    # meta (validated)
+    meta_model = _validate(MetaModel, meta)
     meta_path = out_json_dir / "meta.json"
-    meta_path.write_text(json.dumps(meta, indent=2))
+    meta_path.write_text(_model_dump_json(meta_model, indent=2))
 
     # exposures
     exp_us = pd.read_parquet(exposures_us_path)
@@ -135,4 +186,5 @@ def export_json_bundle(
         "attrib_intl": out_json_dir / "attribution_equity_intl.json",
         "regimes": out_json_dir / "regimes.json",
         "regime_summary": out_sum,
+        "manifest": manifest_path,
     }
