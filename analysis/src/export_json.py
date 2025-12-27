@@ -40,7 +40,7 @@ def export_json_bundle(
     (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(_df_to_records(exp_us), indent=2))
     (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(_df_to_records(exp_intl), indent=2))
 
-    # attribution (keep only the columns we actually plot)
+    # attribution
     a_us = pd.read_parquet(attrib_us_path)
     a_intl = pd.read_parquet(attrib_intl_path)
 
@@ -79,6 +79,34 @@ def export_json_bundle(
         or c.startswith("cum_contrib_")
     ]
     (out_json_dir / "attribution_equity_intl.json").write_text(json.dumps(_df_to_records(a_intl[keep_cols_i]), indent=2))
+    def _to_attrib_records(df: pd.DataFrame) -> list[dict]:
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        records = []
+        contrib_cols = [c for c in df.columns if c.startswith("contrib_")]
+        cum_cols = [c for c in df.columns if c.startswith("cum_contrib_")]
+        for dt, row in df.iterrows():
+            factor_contribs = {c.replace("contrib_", ""): float(row[c]) for c in contrib_cols}
+            cum_factor_contribs = {c.replace("cum_contrib_", ""): float(row[c]) for c in cum_cols}
+            records.append(
+                {
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "excess_return": float(row["y"]),
+                    "alpha_contrib": float(row["alpha_contrib"]),
+                    "factor_contribs": factor_contribs,
+                    "explained_return": float(row["explained"]),
+                    "residual_return": float(row["residual"]),
+                    "explained_share": None if pd.isna(row.get("explained_share")) else float(row["explained_share"]),
+                    "cumulative_factor_contribs": cum_factor_contribs,
+                    "cumulative_explained_return": float(row["cum_explained"]),
+                    "cumulative_residual_return": float(row["cum_residual"]),
+                }
+            )
+        return records
+
+    (out_json_dir / "attribution_equity_us.json").write_text(json.dumps(_to_attrib_records(a_us), indent=2))
+    (out_json_dir / "attribution_equity_intl.json").write_text(json.dumps(_to_attrib_records(a_intl), indent=2))
 
     # regimes
     reg = pd.read_parquet(regimes_path)
