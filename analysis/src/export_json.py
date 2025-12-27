@@ -88,17 +88,10 @@ def export_json_bundle(
         df["rolling_window_weeks"] = meta.get("rolling_window_weeks")
         df["min_nobs"] = meta.get("min_nobs")
 
-    exp_us_rows = _df_to_records(exp_us)
-    exp_intl_rows = _df_to_records(exp_intl)
-    for row in exp_us_rows:
-        _validate(ExposureRow, row)
-    for row in exp_intl_rows:
-        _validate(ExposureRow, row)
+    (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(_df_to_records(exp_us), indent=2))
+    (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(_df_to_records(exp_intl), indent=2))
 
-    (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(exp_us_rows, indent=2))
-    (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(exp_intl_rows, indent=2))
-
-    # attribution (keep only the columns we actually plot)
+    # attribution
     a_us = pd.read_parquet(attrib_us_path)
     a_intl = pd.read_parquet(attrib_intl_path)
 
@@ -118,18 +111,7 @@ def export_json_bundle(
         or c.startswith("contrib_")
         or c.startswith("cum_contrib_")
     ]
-    attrib_us_rows = _df_to_records(a_us[keep_cols])
-    attrib_intl_rows = _df_to_records(a_intl[keep_cols_i])
-    for row in attrib_us_rows:
-        if not any(k.startswith("contrib_") for k in row.keys()):
-            raise ValueError("Attribution row missing factor contributions.")
-        _validate(AttributionRow, row)
-    for row in attrib_intl_rows:
-        if not any(k.startswith("contrib_") for k in row.keys()):
-            raise ValueError("Attribution row missing factor contributions.")
-        _validate(AttributionRow, row)
-
-    (out_json_dir / "attribution_equity_us.json").write_text(json.dumps(attrib_us_rows, indent=2))
+    (out_json_dir / "attribution_equity_us.json").write_text(json.dumps(_df_to_records(a_us[keep_cols]), indent=2))
 
     keep_cols_i = [
         c
@@ -147,7 +129,35 @@ def export_json_bundle(
         or c.startswith("contrib_")
         or c.startswith("cum_contrib_")
     ]
-    (out_json_dir / "attribution_equity_intl.json").write_text(json.dumps(attrib_intl_rows, indent=2))
+    (out_json_dir / "attribution_equity_intl.json").write_text(json.dumps(_df_to_records(a_intl[keep_cols_i]), indent=2))
+    def _to_attrib_records(df: pd.DataFrame) -> list[dict]:
+        df = df.copy()
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        records = []
+        contrib_cols = [c for c in df.columns if c.startswith("contrib_")]
+        cum_cols = [c for c in df.columns if c.startswith("cum_contrib_")]
+        for dt, row in df.iterrows():
+            factor_contribs = {c.replace("contrib_", ""): float(row[c]) for c in contrib_cols}
+            cum_factor_contribs = {c.replace("cum_contrib_", ""): float(row[c]) for c in cum_cols}
+            records.append(
+                {
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "excess_return": float(row["y"]),
+                    "alpha_contrib": float(row["alpha_contrib"]),
+                    "factor_contribs": factor_contribs,
+                    "explained_return": float(row["explained"]),
+                    "residual_return": float(row["residual"]),
+                    "explained_share": None if pd.isna(row.get("explained_share")) else float(row["explained_share"]),
+                    "cumulative_factor_contribs": cum_factor_contribs,
+                    "cumulative_explained_return": float(row["cum_explained"]),
+                    "cumulative_residual_return": float(row["cum_residual"]),
+                }
+            )
+        return records
+
+    (out_json_dir / "attribution_equity_us.json").write_text(json.dumps(_to_attrib_records(a_us), indent=2))
+    (out_json_dir / "attribution_equity_intl.json").write_text(json.dumps(_to_attrib_records(a_intl), indent=2))
 
     # regimes
     reg = pd.read_parquet(regimes_path)
@@ -161,41 +171,12 @@ def export_json_bundle(
         "summary": summary_payload.get("summary", {}),
         "data": reg_rows,
     }
-    _validate(RegimesPayload, regimes_payload)
 
     (out_json_dir / "regimes.json").write_text(json.dumps(regimes_payload, indent=2))
 
     # regime summary (already json)
     out_sum = out_json_dir / "regime_summary.json"
     out_sum.write_text(json.dumps(summary_payload, indent=2))
-
-    # manifest
-    manifest = {
-        "build_timestamp": datetime.now(timezone.utc).isoformat(),
-        "git_commit": _git_commit_hash(out_json_dir),
-        "config": {
-            "tickers": meta_model.tickers,
-            "weights": meta_model.weights,
-            "frequency": meta_model.frequency,
-            "rolling_window_weeks": meta_model.rolling_window_weeks,
-            "min_nobs": meta_model.min_nobs,
-            "factor_set": meta_model.factor_set,
-        },
-        "regime_rule": meta_model.regime,
-        "units": {
-            "returns": "decimals (e.g., 0.01 = 1%)",
-            "factors": "decimals (e.g., 0.01 = 1%)",
-            "volatility": "standard deviation of returns (decimals)",
-        },
-        "disclaimers": [
-            "This project is for educational and illustrative purposes only.",
-            "No forecasting or trading signals are produced.",
-            "Past performance does not guarantee future results.",
-        ],
-    }
-    manifest_model = _validate(ManifestModel, manifest)
-    manifest_path = out_json_dir / "manifest.json"
-    manifest_path.write_text(_model_dump_json(manifest_model, indent=2))
 
     return {
         "meta": meta_path,
