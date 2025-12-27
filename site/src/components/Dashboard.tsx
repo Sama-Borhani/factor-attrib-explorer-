@@ -97,14 +97,7 @@ export default function Dashboard() {
       setAttIntl(aIntl);
       setRegAll(rPayload.data ?? []);
       setRegSummary(rPayload.summary ?? null);
-
-      console.log("[load] OK", {
-        us: { exp: eUs.length, att: aUs.length },
-        intl: { exp: eIntl.length, att: aIntl.length },
-        regimes: rPayload.data?.length ?? 0,
-      });
     })().catch((err) => {
-      console.error(err);
       if (!alive) return;
       setLoadErr(String(err));
     });
@@ -151,6 +144,16 @@ export default function Dashboard() {
     return rows.filter((r) => regimeByDate.get(r.date) === regimeFilter);
   }
 
+  const exposureWindowed = useMemo(
+    () => applyDateRange(applyRegime(applyWindow(aligned.exposures))),
+    [aligned.exposures, windowSel, regimeFilter, dateStart, dateEnd, regimeByDate]
+  );
+
+  const attribWindowed = useMemo(
+    () => applyDateRange(applyRegime(applyWindow(aligned.attribution))),
+    [aligned.attribution, windowSel, regimeFilter, dateStart, dateEnd, regimeByDate]
+  );
+
   const exposureFiltered = exposureWindowed;
   const attribFiltered = attribWindowed;
 
@@ -183,16 +186,6 @@ export default function Dashboard() {
       return true;
     });
   }
-
-  const exposureWindowed = useMemo(
-    () => applyDateRange(applyRegime(applyWindow(aligned.exposures))),
-    [aligned.exposures, windowSel, regimeFilter, dateStart, dateEnd, regimeByDate]
-  );
-
-  const attribWindowed = useMemo(
-    () => applyDateRange(applyRegime(applyWindow(aligned.attribution))),
-    [aligned.attribution, windowSel, regimeFilter, dateStart, dateEnd, regimeByDate]
-  );
 
   const xExp = useMemo(() => exposureWindowed.map((r) => r.date), [exposureWindowed]);
   const xAtt = useMemo(() => attribWindowed.map((r) => r.date), [attribWindowed]);
@@ -406,6 +399,7 @@ export default function Dashboard() {
         {meta ? (
           <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.9 }}>
             <li>Frequency: {meta.frequency}</li>
+            <li>Model: {modelSel.toUpperCase()}</li>
             <li>Rolling window: {meta.rolling_window_weeks} weeks (min obs {meta.min_nobs})</li>
             <li>
               Regime rule: vol {meta.regime.vol_window_weeks}w, percentile {meta.regime.percentile}, lookback {meta.regime.lookback_weeks}w

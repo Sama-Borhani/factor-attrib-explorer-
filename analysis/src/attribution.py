@@ -55,16 +55,6 @@ def compute_attribution(
         out[f"cum_contrib_{c}"] = out[f"contrib_{c}"].cumsum()
     out["cum_explained_return"] = out["explained_return"].cumsum()
     out["cum_residual_return"] = out["residual_return"].cumsum()
-    out["explained"] = explained
-    out["residual"] = out["y"] - out["explained"]
-    out["explained_share"] = out["explained"] / out["y"]
-    out.loc[out["y"] == 0, "explained_share"] = pd.NA
-
-    for c in x_cols:
-        out[f"cum_contrib_{c}"] = out[f"contrib_{c}"].cumsum()
-    out["cum_explained"] = out["explained"].cumsum()
-    out["cum_residual"] = out["residual"].cumsum()
-
     return out
 
 
