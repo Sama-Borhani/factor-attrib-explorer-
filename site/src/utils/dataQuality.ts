@@ -1,8 +1,8 @@
 export type QualityStatus = "good" | "warn" | "bad";
 
 export function statusFromMissingPct(pct: number): QualityStatus {
-  if (pct <= 1) return "good";
-  if (pct <= 5) return "warn";
+  if (pct < 5) return "good";
+  if (pct <= 15) return "warn";
   return "bad";
 }
 

@@ -9,13 +9,14 @@ venv/
 
 # Data / outputs
 analysis/outputs/
-site/public/data/
+site/public/data/*
 *.parquet
 *.csv
 *.json
 !site/package.json
 !site/package-lock.json
 !vercel.json
+!site/public/data/.gitkeep
 
 # Node
 site/node_modules/

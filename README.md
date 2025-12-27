@@ -83,3 +83,15 @@ pytest analysis/tests
 ## CI/CD
 - PR validation: `.github/workflows/pr-validation.yml` runs lint + tests.
 - Data refresh: `.github/workflows/data-refresh.yml` runs weekly and on demand.
+
+## Configuration guide
+- Core settings live in `analysis/src/config.py` (tickers, weights, dates, frequency, rolling windows, factor set, regime params).
+- Exported JSON is written to `site/public/data/` by the pipeline.
+
+## Known limitations
+- Factor datasets are FF3 only; FF5 is a placeholder in the UI.
+- Weekly aggregation only; daily mode is not implemented yet.
+- Data refresh depends on upstream APIs (yfinance, Ken French).
+
+## License
+See `LICENSE`.

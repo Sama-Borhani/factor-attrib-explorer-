@@ -100,6 +100,9 @@ def export_json_bundle(
     (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(exp_us_rows, indent=2))
     (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(exp_intl_rows, indent=2))
 
+    (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(exp_us_rows, indent=2))
+    (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(exp_intl_rows, indent=2))
+
     exp_us_rows = _df_to_records(exp_us)
     exp_intl_rows = _df_to_records(exp_intl)
     for row in exp_us_rows:
