@@ -13,6 +13,7 @@ site/public/data/*
 *.parquet
 *.csv
 *.json
+!package.json
 !site/package.json
 !site/package-lock.json
 !vercel.json
