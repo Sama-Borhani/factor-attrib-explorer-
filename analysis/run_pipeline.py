@@ -140,6 +140,7 @@ def main() -> None:
     r_path, s_path = regimes_and_summary(
         returns_path=cfg.out_data / "returns_weekly.parquet",
         exposures_path=cfg.out_data / "exposures" / "exposures_equity_us.parquet",
+        attribution_path=cfg.out_data / "attribution" / "attrib_equity_us.parquet",
         out_regimes_path=out_regimes,
         out_summary_path=out_summary,
         vol_window_weeks=cfg.vol_window_weeks,
