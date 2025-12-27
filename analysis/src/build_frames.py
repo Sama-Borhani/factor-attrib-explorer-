@@ -6,6 +6,8 @@ import json
 
 import pandas as pd
 
+from analysis.src.portfolio import compute_portfolio_returns
+
 
 def _load_parquet(p: Path) -> pd.DataFrame:
     df = pd.read_parquet(p)
@@ -14,12 +16,8 @@ def _load_parquet(p: Path) -> pd.DataFrame:
 
 
 def _make_equal_weight_portfolio(returns: pd.DataFrame, tickers: Tuple[str, ...], weights: Dict[str, float]) -> pd.Series:
-    w = pd.Series({t: weights[t] for t in tickers}, dtype=float)
-    w = w / w.sum()
     r = returns[list(tickers)].copy()
-    # Simple missing policy for v1: drop weeks where any holding missing
-    r = r.dropna(how="any")
-    port = (r * w).sum(axis=1)
+    port = compute_portfolio_returns(r, weights={t: weights[t] for t in tickers}, missing_price_policy="drop_any")
     port.name = "PORT_RET"
     return port
 

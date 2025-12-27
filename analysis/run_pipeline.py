@@ -8,6 +8,7 @@ from analysis.src.build_frames import build_frames
 from analysis.src.rolling_model import run_rolling_from_parquet
 from analysis.src.attribution import attribution_from_parquets
 from analysis.src.regimes import regimes_and_summary
+from analysis.src.portfolio import write_portfolio_summary
 
 def _print_config(cfg) -> None:
     print("CONFIG LOADED")
@@ -62,6 +63,18 @@ def main() -> None:
         total_universe=cfg.tickers,
     )
     print("Saved frames:", frames)
+
+    # 3b) Portfolio summary
+    print("\n[3b/6] Portfolio summary")
+    summary_path = write_portfolio_summary(
+        returns_path=price_out["weekly_returns"],
+        out_path=cfg.out_reports / "portfolio_summary.json",
+        weights=cfg.weights,
+        freq=cfg.freq,
+        missing_price_policy="drop_any",
+        compounding="geometric",
+    )
+    print("Saved portfolio summary:", summary_path)
 
     # 4) Rolling exposures
     print("\n[4/6] Running rolling regressions -> exposures (cached)")
