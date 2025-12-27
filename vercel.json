@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "rootDirectory": "site",
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next"
+  "installCommand": "npm install --prefix site",
+  "buildCommand": "npm run build --prefix site",
+  "outputDirectory": "site/.next"
 }
