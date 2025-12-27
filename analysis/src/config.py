@@ -19,6 +19,7 @@ class Config:
 
     # Rolling regression
     rolling_window_weeks: int = 52
+    rolling_windows_weeks: tuple[int, ...] = (26, 52)
     min_nobs: int = 45
 
     # Regimes (portfolio realized vol)

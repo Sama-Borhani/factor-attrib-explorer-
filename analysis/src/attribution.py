@@ -46,8 +46,15 @@ def compute_attribution(
         out[f"contrib_{c}"] = contrib
         explained = explained + contrib
 
-    out["explained"] = explained
-    out["residual"] = out["y"] - out["explained"]
+    out["explained_return"] = explained
+    out["residual_return"] = out["y"] - out["explained_return"]
+    out["explained_share"] = out["explained_return"] / out["y"].replace(0, pd.NA)
+
+    # Cumulative contributions for stacked-area visuals
+    for c in x_cols:
+        out[f"cum_contrib_{c}"] = out[f"contrib_{c}"].cumsum()
+    out["cum_explained_return"] = out["explained_return"].cumsum()
+    out["cum_residual_return"] = out["residual_return"].cumsum()
     return out
 
 

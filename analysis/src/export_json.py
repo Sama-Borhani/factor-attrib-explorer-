@@ -33,6 +33,10 @@ def export_json_bundle(
     # exposures
     exp_us = pd.read_parquet(exposures_us_path)
     exp_intl = pd.read_parquet(exposures_intl_path)
+    for df in (exp_us, exp_intl):
+        df["rolling_window_weeks"] = meta.get("rolling_window_weeks")
+        df["min_nobs"] = meta.get("min_nobs")
+
     (out_json_dir / "exposures_equity_us.json").write_text(json.dumps(_df_to_records(exp_us), indent=2))
     (out_json_dir / "exposures_equity_intl.json").write_text(json.dumps(_df_to_records(exp_intl), indent=2))
 
@@ -40,20 +44,60 @@ def export_json_bundle(
     a_us = pd.read_parquet(attrib_us_path)
     a_intl = pd.read_parquet(attrib_intl_path)
 
-    keep_cols = [c for c in a_us.columns if c in {"y","alpha_contrib","explained","residual"} or c.startswith("contrib_")]
+    keep_cols = [
+        c
+        for c in a_us.columns
+        if c
+        in {
+            "y",
+            "alpha_contrib",
+            "explained_return",
+            "residual_return",
+            "explained_share",
+            "cum_explained_return",
+            "cum_residual_return",
+        }
+        or c.startswith("contrib_")
+        or c.startswith("cum_contrib_")
+    ]
     (out_json_dir / "attribution_equity_us.json").write_text(json.dumps(_df_to_records(a_us[keep_cols]), indent=2))
 
-    keep_cols_i = [c for c in a_intl.columns if c in {"y","alpha_contrib","explained","residual"} or c.startswith("contrib_")]
+    keep_cols_i = [
+        c
+        for c in a_intl.columns
+        if c
+        in {
+            "y",
+            "alpha_contrib",
+            "explained_return",
+            "residual_return",
+            "explained_share",
+            "cum_explained_return",
+            "cum_residual_return",
+        }
+        or c.startswith("contrib_")
+        or c.startswith("cum_contrib_")
+    ]
     (out_json_dir / "attribution_equity_intl.json").write_text(json.dumps(_df_to_records(a_intl[keep_cols_i]), indent=2))
 
     # regimes
     reg = pd.read_parquet(regimes_path)
     reg = reg[["regime", "vol", "vol_thresh"]].copy()
-    (out_json_dir / "regimes.json").write_text(json.dumps(_df_to_records(reg), indent=2))
+    reg_rows = _df_to_records(reg)
+
+    summary_payload = json.loads(Path(regime_summary_path).read_text())
+    regimes_payload = {
+        "metadata": summary_payload.get("metadata", {}),
+        "stress_fraction": summary_payload.get("stress_fraction"),
+        "summary": summary_payload.get("summary", {}),
+        "data": reg_rows,
+    }
+
+    (out_json_dir / "regimes.json").write_text(json.dumps(regimes_payload, indent=2))
 
     # regime summary (already json)
     out_sum = out_json_dir / "regime_summary.json"
-    out_sum.write_text(Path(regime_summary_path).read_text())
+    out_sum.write_text(json.dumps(summary_payload, indent=2))
 
     return {
         "meta": meta_path,
