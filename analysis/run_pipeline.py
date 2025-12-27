@@ -1,3 +1,5 @@
+import argparse
+
 from analysis.src.export_json import export_json_bundle
 from analysis.src.config import get_config
 from analysis.src.data_prices import fetch_prices_weekly
@@ -7,8 +9,7 @@ from analysis.src.rolling_model import run_rolling_from_parquet
 from analysis.src.attribution import attribution_from_parquets
 from analysis.src.regimes import regimes_and_summary
 
-def main():
-    cfg = get_config()
+def _print_config(cfg) -> None:
     print("CONFIG LOADED")
     print("Tickers:", cfg.tickers)
     print("Weights sum:", sum(cfg.weights.values()))
@@ -16,6 +17,18 @@ def main():
     print("Rolling window:", cfg.rolling_window_weeks, "weeks | min_nobs:", cfg.min_nobs)
     print("Regime:", f"vol_window={cfg.vol_window_weeks}w, p={cfg.vol_percentile}, lookback={cfg.vol_lookback_weeks}w")
     print("Output paths:", cfg.out_data, cfg.out_json, cfg.out_reports)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run factor attribution pipeline.")
+    parser.add_argument("--dry-run", action="store_true", help="Print config and exit.")
+    args = parser.parse_args()
+
+    cfg = get_config()
+    _print_config(cfg)
+
+    if args.dry_run:
+        return
 
     # 1) Prices
     print("\n[1/6] Fetching prices -> weekly returns (cached)")
