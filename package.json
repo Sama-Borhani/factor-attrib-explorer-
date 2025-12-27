@@ -1,0 +1,14 @@
+{
+  "name": "factor-attrib-explorer",
+  "private": true,
+  "workspaces": [
+    "site"
+  ],
+  "devDependencies": {
+    "next": "14.2.4"
+  },
+  "scripts": {
+    "dev": "npm --workspace site run dev",
+    "build": "npm --workspace site run build"
+  }
+}
