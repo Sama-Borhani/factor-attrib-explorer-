@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Tuple
+import json
 
 import pandas as pd
 
@@ -73,8 +74,46 @@ def build_frames(
     p_us = out_dir / "frame_equity_us.parquet"
     p_dx = out_dir / "frame_equity_intl.parquet"
     p_macro = out_dir / "frame_total_macro.parquet"
+    p_model = out_dir / "model_frame.parquet"
     frame_us.to_parquet(p_us)
     frame_dx.to_parquet(p_dx)
     frame_macro.to_parquet(p_macro)
+    frame_us.to_parquet(p_model)
 
-    return {"frame_equity_us": p_us, "frame_equity_intl": p_dx, "frame_total_macro": p_macro}
+    report_dir = out_dir.parent.parent / "reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / "quality_report.json"
+    missing_pct = (rets.isna().mean() * 100).round(2).to_dict()
+    coverage = {}
+    for t in rets.columns:
+        s = rets[t].dropna()
+        coverage[t] = {
+            "start": str(s.index.min().date()) if not s.empty else None,
+            "end": str(s.index.max().date()) if not s.empty else None,
+            "rows_non_missing": int(s.shape[0]),
+        }
+
+    report = {
+        "missing_pct_weekly_returns": missing_pct,
+        "coverage": coverage,
+        "aligned_sample_sizes": {
+            "equity_us": int(frame_us.shape[0]),
+            "equity_intl": int(frame_dx.shape[0]),
+            "total_macro": int(frame_macro.shape[0]),
+            "model_frame": int(frame_us.shape[0]),
+        },
+        "notes": {
+            "returns": "Weekly simple returns from weekly prices.",
+            "factors": "Fama-French factors in decimals, weekly compounded.",
+            "alignment": "Frames use inner-join on dates and drop NaNs.",
+        },
+    }
+    report_path.write_text(json.dumps(report, indent=2))
+
+    return {
+        "frame_equity_us": p_us,
+        "frame_equity_intl": p_dx,
+        "frame_total_macro": p_macro,
+        "model_frame": p_model,
+        "quality_report": report_path,
+    }
