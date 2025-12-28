@@ -16,10 +16,12 @@ site/public/data/*
 !package.json
 !site/package.json
 !site/package-lock.json
+!site/tsconfig.json
 !vercel.json
 !site/public/data/.gitkeep
 
 # Node
+node_modules/
 site/node_modules/
 site/.next/
 site/out/
