@@ -1,6 +1,12 @@
 {
   "name": "factor-attrib-explorer",
   "private": true,
+  "scripts": {
+    "build": "npm --prefix site run build",
+    "dev": "npm --prefix site run dev",
+    "lint": "npm --prefix site run lint",
+    "start": "npm --prefix site run start"
+  },
   "workspaces": [
     "site"
   ],
