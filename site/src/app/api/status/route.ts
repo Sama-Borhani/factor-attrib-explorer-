@@ -2,16 +2,6 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 
-import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-
-export async function GET() {
-  const p = path.join(process.cwd(), "public", "data", "manifest.json");
-  const raw = fs.readFileSync(p, "utf8");
-  return NextResponse.json(JSON.parse(raw));
-}
-
 function load(p: string) {
   return JSON.parse(fs.readFileSync(p, "utf8"));
 }
@@ -53,4 +43,3 @@ export async function GET() {
     },
   });
 }
-
