@@ -1,14 +1,8 @@
 # factor-attrib-explorer-
-**Deployment URL:** _TBD (add Vercel URL after first deploy)_
+**Deployment URL:** _TBD 
 
 Interactive factor attribution and regime diagnostics explorer for a global multi-asset portfolio. Explains what drives returns and risk across calm vs stress regimes using region-aware Fama-French equity factors and macro driver attribution. Static, reproducible, and interview-ready.
 
-## Screenshots
-Place 3–5 screenshots in `outputs/screenshots/` and update the links below after running the site locally:
-
-- `outputs/screenshots/dashboard-rolling-betas.png`
-- `outputs/screenshots/dashboard-attribution.png`
-- `outputs/screenshots/dashboard-regime-comparison.png`
 
 ## Project spec
 **Goal:** explain what drives portfolio returns and how exposures differ in calm vs stress markets.
